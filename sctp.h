@@ -1,738 +1,877 @@
-/* SCTP kernel implementation
+/* SCTP kernel Implementation: User API extensions.
+ *
+ * sctp.h
+ *
+ * Distributed under the terms of the LGPL v2.1 as described in
+ *    http://www.gnu.org/copyleft/lesser.txt 
+ *
+ * This file is part of the user library that offers support for the
+ * Linux Kernel SCTP Implementation. The main purpose of this
+ * code is to provide the SCTP Socket API mappings for user
+ * application to interface with SCTP in kernel.
+ *
+ * This header represents the structures and constants needed to support
+ * the SCTP Extension to the Sockets API.
+ *
  * (C) Copyright IBM Corp. 2001, 2004
  * Copyright (c) 1999-2000 Cisco, Inc.
  * Copyright (c) 1999-2001 Motorola, Inc.
- * Copyright (c) 2001-2003 Intel Corp.
- *
- * This file is part of the SCTP kernel implementation
- *
- * The base lksctp header.
- *
- * This SCTP implementation is free software;
- * you can redistribute it and/or modify it under the terms of
- * the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This SCTP implementation is distributed in the hope that it
- * will be useful, but WITHOUT ANY WARRANTY; without even the implied
- *                 ************************
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU CC; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
- *
- * Please send any bug reports or fixes you make to the
- * email address(es):
- *    lksctp developers <lksctp-developers@lists.sourceforge.net>
- *
- * Or submit a bug report through the following website:
- *    http://www.sf.net/projects/lksctp
  *
  * Written or modified by:
- *    La Monte H.P. Yarroll <piggy@acm.org>
- *    Xingang Guo           <xingang.guo@intel.com>
- *    Jon Grimm             <jgrimm@us.ibm.com>
- *    Daisy Chang           <daisyc@us.ibm.com>
- *    Sridhar Samudrala     <sri@us.ibm.com>
- *    Ardelle Fan           <ardelle.fan@intel.com>
- *    Ryan Layer            <rmlayer@us.ibm.com>
- *    Kevin Gao             <kevin.gao@intel.com> 
- *
- * Any bugs reported given to us we will try to fix... any fixes shared will
- * be incorporated into the next SCTP release.
+ *    La Monte H.P. Yarroll    <piggy@acm.org>
+ *    R. Stewart               <randall@sctp.chicago.il.us>
+ *    K. Morneau               <kmorneau@cisco.com>
+ *    Q. Xie                   <qxie1@email.mot.com>
+ *    Karl Knutson             <karl@athena.chicago.il.us>
+ *    Jon Grimm                <jgrimm@austin.ibm.com>
+ *    Daisy Chang              <daisyc@us.ibm.com>
+ *    Inaky Perez-Gonzalez     <inaky.gonzalez@intel.com>
+ *    Sridhar Samudrala        <sri@us.ibm.com>
+ *    Vlad Yasevich		<vladislav.yasevich@hp.com>
  */
 
-#ifndef __net_sctp_h__
-#define __net_sctp_h__
+#ifndef __linux_sctp_h__
+#define __linux_sctp_h__
 
-/* Header Strategy.
- *    Start getting some control over the header file depencies:
- *       includes
- *       constants
- *       structs
- *       prototypes
- *       macros, externs, and inlines
- *
- *   Move test_frame specific items out of the kernel headers
- *   and into the test frame headers.   This is not perfect in any sense
- *   and will continue to evolve.
- */
-
+#include <stdint.h>
 #include <linux/types.h>
-#include <linux/slab.h>
-#include <linux/in.h>
-#include <linux/tty.h>
-#include <linux/proc_fs.h>
-#include <linux/spinlock.h>
-#include <linux/jiffies.h>
-#include <linux/idr.h>
+#include <sys/socket.h>
 
-#define CONFIG_IP_SCTP_MODULE 1
-#define SCTP_DEFAULT_COOKIE_HMAC_MD5 md5
+__BEGIN_DECLS
 
-#if IS_ENABLED(CONFIG_IPV6)
-#include <net/ipv6.h>
-#include <net/ip6_route.h>
+typedef __s32 sctp_assoc_t;
+
+/* Socket option layer for SCTP */
+#ifndef SOL_SCTP
+#define SOL_SCTP	132
 #endif
 
-#include <asm/uaccess.h>
-#include <asm/page.h>
-#include <net/sock.h>
-#include <net/snmp.h>
-#include <net/sctp/structs.h>
-#include <net/sctp/constants.h>
-
-
-/* Set SCTP_DEBUG flag via config if not already set. */
-#ifndef SCTP_DEBUG
-#ifdef CONFIG_SCTP_DBG_MSG
-#define SCTP_DEBUG	1
-#else
-#define SCTP_DEBUG      0
-#endif /* CONFIG_SCTP_DBG */
-#endif /* SCTP_DEBUG */
-
-#ifdef CONFIG_IP_SCTP_MODULE
-#define SCTP_PROTOSW_FLAG 0
-#else /* static! */
-#define SCTP_PROTOSW_FLAG INET_PROTOSW_PERMANENT
+#ifndef IPPROTO_SCTP
+#define IPPROTO_SCTP    132
 #endif
 
+/* 9. Preprocessor constants */
+#define HAVE_SCTP
+#define HAVE_KERNEL_SCTP
+#define HAVE_SCTP_MULTIBUF
+#define HAVE_SCTP_NOCONNECT
+#define HAVE_SCTP_PRSCTP
+#define HAVE_SCTP_ADDIP
+#define HAVE_SCTP_CANSET_PRIMARY
 
-/* Certain internal static functions need to be exported when
- * compiled into the test frame.
+typedef enum
+{
+
+	SCTP_STATE_CLOSED = 0,
+	SCTP_STATE_COOKIE_WAIT,		  // 1
+	SCTP_STATE_COOKIE_ECHOED,	  // 2
+	SCTP_STATE_ESTABLISHED,		  // 3
+	SCTP_STATE_SHUTDOWN_PENDING,  // 4
+	SCTP_STATE_SHUTDOWN_SENT,	  // 5
+	SCTP_STATE_SHUTDOWN_RECEIVED, // 6
+	SCTP_STATE_SHUTDOWN_ACK_SENT  // 7
+
+} sctp_state_t;
+
+/* The following symbols come from the Sockets API Extensions for
+ * SCTP <draft-ietf-tsvwg-sctpsocket-07.txt>.
  */
-#ifndef SCTP_STATIC
-#define SCTP_STATIC static
-#endif
-
-/*
- * Function declarations.
- */
-
-/*
- * sctp/protocol.c
- */
-extern int sctp_copy_local_addr_list(struct net *, struct sctp_bind_addr *,
-				     sctp_scope_t, gfp_t gfp,
-				     int flags);
-extern struct sctp_pf *sctp_get_pf_specific(sa_family_t family);
-extern int sctp_register_pf(struct sctp_pf *, sa_family_t);
-extern void sctp_addr_wq_mgmt(struct net *, struct sctp_sockaddr_entry *, int);
-
-/*
- * sctp/socket.c
- */
-int sctp_backlog_rcv(struct sock *sk, struct sk_buff *skb);
-int sctp_inet_listen(struct socket *sock, int backlog);
-void sctp_write_space(struct sock *sk);
-void sctp_data_ready(struct sock *sk, int len);
-unsigned int sctp_poll(struct file *file, struct socket *sock,
-		poll_table *wait);
-void sctp_sock_rfree(struct sk_buff *skb);
-void sctp_copy_sock(struct sock *newsk, struct sock *sk,
-		    struct sctp_association *asoc);
-extern struct percpu_counter sctp_sockets_allocated;
-extern int sctp_asconf_mgmt(struct sctp_sock *, struct sctp_sockaddr_entry *);
-
-/*
- * sctp/primitive.c
- */
-int sctp_primitive_ASSOCIATE(struct net *, struct sctp_association *, void *arg);
-int sctp_primitive_SHUTDOWN(struct net *, struct sctp_association *, void *arg);
-int sctp_primitive_ABORT(struct net *, struct sctp_association *, void *arg);
-int sctp_primitive_SEND(struct net *, struct sctp_association *, void *arg);
-int sctp_primitive_REQUESTHEARTBEAT(struct net *, struct sctp_association *, void *arg);
-int sctp_primitive_ASCONF(struct net *, struct sctp_association *, void *arg);
-
-/*
- * sctp/input.c
- */
-int sctp_rcv(struct sk_buff *skb);
-void sctp_v4_err(struct sk_buff *skb, u32 info);
-void sctp_hash_established(struct sctp_association *);
-void sctp_unhash_established(struct sctp_association *);
-void sctp_hash_endpoint(struct sctp_endpoint *);
-void sctp_unhash_endpoint(struct sctp_endpoint *);
-struct sock *sctp_err_lookup(struct net *net, int family, struct sk_buff *,
-			     struct sctphdr *, struct sctp_association **,
-			     struct sctp_transport **);
-void sctp_err_finish(struct sock *, struct sctp_association *);
-void sctp_icmp_frag_needed(struct sock *, struct sctp_association *,
-			   struct sctp_transport *t, __u32 pmtu);
-void sctp_icmp_redirect(struct sock *, struct sctp_transport *,
-			struct sk_buff *);
-void sctp_icmp_proto_unreachable(struct sock *sk,
-				 struct sctp_association *asoc,
-				 struct sctp_transport *t);
-void sctp_backlog_migrate(struct sctp_association *assoc,
-			  struct sock *oldsk, struct sock *newsk);
-
-/*
- * sctp/proc.c
- */
-int sctp_snmp_proc_init(struct net *net);
-void sctp_snmp_proc_exit(struct net *net);
-int sctp_eps_proc_init(struct net *net);
-void sctp_eps_proc_exit(struct net *net);
-int sctp_assocs_proc_init(struct net *net);
-void sctp_assocs_proc_exit(struct net *net);
-int sctp_remaddr_proc_init(struct net *net);
-void sctp_remaddr_proc_exit(struct net *net);
+enum sctp_optname {
+	SCTP_RTOINFO,
+#define SCTP_RTOINFO SCTP_RTOINFO
+	SCTP_ASSOCINFO,
+#define SCTP_ASSOCINFO SCTP_ASSOCINFO
+	SCTP_INITMSG,
+#define SCTP_INITMSG SCTP_INITMSG
+	SCTP_NODELAY, 	/* Get/set nodelay option. */
+#define SCTP_NODELAY	SCTP_NODELAY
+	SCTP_AUTOCLOSE,
+#define SCTP_AUTOCLOSE SCTP_AUTOCLOSE
+	SCTP_SET_PEER_PRIMARY_ADDR, 
+#define SCTP_SET_PEER_PRIMARY_ADDR SCTP_SET_PEER_PRIMARY_ADDR
+	SCTP_PRIMARY_ADDR,
+#define SCTP_PRIMARY_ADDR SCTP_PRIMARY_ADDR
+	SCTP_ADAPTATION_LAYER,
+#define SCTP_ADAPTATION_LAYER SCTP_ADAPTATION_LAYER
+	SCTP_DISABLE_FRAGMENTS,
+#define SCTP_DISABLE_FRAGMENTS SCTP_DISABLE_FRAGMENTS
+	SCTP_PEER_ADDR_PARAMS,
+#define SCTP_PEER_ADDR_PARAMS SCTP_PEER_ADDR_PARAMS
+	SCTP_DEFAULT_SEND_PARAM,
+#define SCTP_DEFAULT_SEND_PARAM SCTP_DEFAULT_SEND_PARAM
+	SCTP_EVENTS,
+#define SCTP_EVENTS SCTP_EVENTS
+	SCTP_I_WANT_MAPPED_V4_ADDR,  /* Turn on/off mapped v4 addresses  */
+#define SCTP_I_WANT_MAPPED_V4_ADDR SCTP_I_WANT_MAPPED_V4_ADDR
+	SCTP_MAXSEG, 	/* Get/set maximum fragment. */
+#define SCTP_MAXSEG 	SCTP_MAXSEG
+	SCTP_STATUS,
+#define SCTP_STATUS SCTP_STATUS
+	SCTP_GET_PEER_ADDR_INFO,
+#define SCTP_GET_PEER_ADDR_INFO SCTP_GET_PEER_ADDR_INFO
+	SCTP_DELAYED_ACK_TIME,
+#define SCTP_DELAYED_ACK_TIME SCTP_DELAYED_ACK_TIME
+	SCTP_CONTEXT,	/* Receive Context */
+#define SCTP_CONTEXT SCTP_CONTEXT
+	SCTP_FRAGMENT_INTERLEAVE,
+#define SCTP_FRAGMENT_INTERLEAVE SCTP_FRAGMENT_INTERLEAVE
+	SCTP_PARTIAL_DELIVERY_POINT,	/* Set/Get partial delivery point */
+#define SCTP_PARTIAL_DELIVERY_POINT SCTP_PARTIAL_DELIVERY_POINT
+	SCTP_MAX_BURST,		/* Set/Get max burst */
+#define SCTP_MAX_BURST SCTP_MAX_BURST
+	SCTP_AUTH_CHUNK,	/* Set only: add a chunk type to authenticat */
+#define SCTP_AUTH_CHUNK SCTP_AUTH_CHUNK
+	SCTP_HMAC_IDENT,
+#define SCTP_HMAC_IDENT SCTP_HMAC_IDENT
+	SCTP_AUTH_KEY,
+#define SCTP_AUTH_KEY SCTP_AUTH_KEY
+	SCTP_AUTH_ACTIVE_KEY,
+#define SCTP_AUTH_ACTIVE_KEY SCTP_AUTH_ACTIVE_KEY
+	SCTP_AUTH_DELETE_KEY,
+#define SCTP_AUTH_DELETE_KEY SCTP_AUTH_DELETE_KEY
+	SCTP_PEER_AUTH_CHUNKS,		/* Read only */
+#define SCTP_PEER_AUTH_CHUNKS SCTP_PEER_AUTH_CHUNKS
+	SCTP_LOCAL_AUTH_CHUNKS,		/* Read only */
+#define SCTP_LOCAL_AUTH_CHUNKS SCTP_LOCAL_AUTH_CHUNKS
+	SCTP_GET_ASSOC_NUMBER,		/* Read only */
+#define SCTP_GET_ASSOC_NUMBER SCTP_GET_ASSOC_NUMBER
+	SCTP_GET_ASSOC_ID_LIST,  	/* Read only */
+#define SCTP_GET_ASSOC_ID_LIST SCTP_GET_ASSOC_ID_LIST
+	SCTP_PEER_ADDR_THLDS = 31,
+#define SCTP_PEER_ADDR_THLDS SCTP_PEER_ADDR_THLDS
 
 
-/*
- * Module global variables
- */
 
- /*
-  * sctp/protocol.c
-  */
-extern struct kmem_cache *sctp_chunk_cachep __read_mostly;
-extern struct kmem_cache *sctp_bucket_cachep __read_mostly;
-
-/*
- *  Section:  Macros, externs, and inlines
- */
-
-
-#ifdef TEST_FRAME
-#include <test_frame.h>
-#else
-
-/* spin lock wrappers. */
-#define sctp_spin_lock_irqsave(lock, flags) spin_lock_irqsave(lock, flags)
-#define sctp_spin_unlock_irqrestore(lock, flags)  \
-       spin_unlock_irqrestore(lock, flags)
-#define sctp_local_bh_disable() local_bh_disable()
-#define sctp_local_bh_enable()  local_bh_enable()
-#define sctp_spin_lock(lock)    spin_lock(lock)
-#define sctp_spin_unlock(lock)  spin_unlock(lock)
-#define sctp_write_lock(lock)   write_lock(lock)
-#define sctp_write_unlock(lock) write_unlock(lock)
-#define sctp_read_lock(lock)    read_lock(lock)
-#define sctp_read_unlock(lock)  read_unlock(lock)
-
-/* sock lock wrappers. */
-#define sctp_lock_sock(sk)       lock_sock(sk)
-#define sctp_release_sock(sk)    release_sock(sk)
-#define sctp_bh_lock_sock(sk)    bh_lock_sock(sk)
-#define sctp_bh_unlock_sock(sk)  bh_unlock_sock(sk)
-
-/* SCTP SNMP MIB stats handlers */
-#define SCTP_INC_STATS(net, field)      SNMP_INC_STATS((net)->sctp.sctp_statistics, field)
-#define SCTP_INC_STATS_BH(net, field)   SNMP_INC_STATS_BH((net)->sctp.sctp_statistics, field)
-#define SCTP_INC_STATS_USER(net, field) SNMP_INC_STATS_USER((net)->sctp.sctp_statistics, field)
-#define SCTP_DEC_STATS(net, field)      SNMP_DEC_STATS((net)->sctp.sctp_statistics, field)
-
-#endif /* !TEST_FRAME */
-
-/* sctp mib definitions */
-enum {
-	SCTP_MIB_NUM = 0,
-	SCTP_MIB_CURRESTAB,			/* CurrEstab */
-	SCTP_MIB_ACTIVEESTABS,			/* ActiveEstabs */
-	SCTP_MIB_PASSIVEESTABS,			/* PassiveEstabs */
-	SCTP_MIB_ABORTEDS,			/* Aborteds */
-	SCTP_MIB_SHUTDOWNS,			/* Shutdowns */
-	SCTP_MIB_OUTOFBLUES,			/* OutOfBlues */
-	SCTP_MIB_CHECKSUMERRORS,		/* ChecksumErrors */
-	SCTP_MIB_OUTCTRLCHUNKS,			/* OutCtrlChunks */
-	SCTP_MIB_OUTORDERCHUNKS,		/* OutOrderChunks */
-	SCTP_MIB_OUTUNORDERCHUNKS,		/* OutUnorderChunks */
-	SCTP_MIB_INCTRLCHUNKS,			/* InCtrlChunks */
-	SCTP_MIB_INORDERCHUNKS,			/* InOrderChunks */
-	SCTP_MIB_INUNORDERCHUNKS,		/* InUnorderChunks */
-	SCTP_MIB_FRAGUSRMSGS,			/* FragUsrMsgs */
-	SCTP_MIB_REASMUSRMSGS,			/* ReasmUsrMsgs */
-	SCTP_MIB_OUTSCTPPACKS,			/* OutSCTPPacks */
-	SCTP_MIB_INSCTPPACKS,			/* InSCTPPacks */
-	SCTP_MIB_T1_INIT_EXPIREDS,
-	SCTP_MIB_T1_COOKIE_EXPIREDS,
-	SCTP_MIB_T2_SHUTDOWN_EXPIREDS,
-	SCTP_MIB_T3_RTX_EXPIREDS,
-	SCTP_MIB_T4_RTO_EXPIREDS,
-	SCTP_MIB_T5_SHUTDOWN_GUARD_EXPIREDS,
-	SCTP_MIB_DELAY_SACK_EXPIREDS,
-	SCTP_MIB_AUTOCLOSE_EXPIREDS,
-	SCTP_MIB_T1_RETRANSMITS,
-	SCTP_MIB_T3_RETRANSMITS,
-	SCTP_MIB_PMTUD_RETRANSMITS,
-	SCTP_MIB_FAST_RETRANSMITS,
-	SCTP_MIB_IN_PKT_SOFTIRQ,
-	SCTP_MIB_IN_PKT_BACKLOG,
-	SCTP_MIB_IN_PKT_DISCARDS,
-	SCTP_MIB_IN_DATA_CHUNK_DISCARDS,
-	__SCTP_MIB_MAX
+	/* Internal Socket Options. Some of the sctp library functions are 
+	 * implemented using these socket options.
+	 */
+	SCTP_SOCKOPT_BINDX_ADD = 100,/* BINDX requests for adding addresses. */
+#define SCTP_SOCKOPT_BINDX_ADD	SCTP_SOCKOPT_BINDX_ADD
+	SCTP_SOCKOPT_BINDX_REM, /* BINDX requests for removing addresses. */
+#define SCTP_SOCKOPT_BINDX_REM	SCTP_SOCKOPT_BINDX_REM
+	SCTP_SOCKOPT_PEELOFF, 	/* peel off association. */
+#define SCTP_SOCKOPT_PEELOFF	SCTP_SOCKOPT_PEELOFF
+	SCTP_GET_PEER_ADDRS_NUM_OLD, 	/* Get number of peer addresss. */
+#define SCTP_GET_PEER_ADDRS_NUM_OLD	SCTP_GET_PEER_ADDRS_NUM_OLD
+	SCTP_GET_PEER_ADDRS_OLD, 	/* Get all peer addresss. */
+#define SCTP_GET_PEER_ADDRS_OLD	SCTP_GET_PEER_ADDRS_OLD
+	SCTP_GET_LOCAL_ADDRS_NUM_OLD, 	/* Get number of local addresss. */
+#define SCTP_GET_LOCAL_ADDRS_NUM_OLD	SCTP_GET_LOCAL_ADDRS_NUM_OLD
+	SCTP_GET_LOCAL_ADDRS_OLD, 	/* Get all local addresss. */
+#define SCTP_GET_LOCAL_ADDRS_OLD	SCTP_GET_LOCAL_ADDRS_OLD
+	SCTP_SOCKOPT_CONNECTX_OLD, /* CONNECTX requests. OLD implementation */
+#define SCTP_SOCKOPT_CONNECTX_OLD	SCTP_SOCKOPT_CONNECTX_OLD
+	SCTP_GET_PEER_ADDRS, 	/* Get all peer addresss. */
+#define SCTP_GET_PEER_ADDRS	SCTP_GET_PEER_ADDRS
+	SCTP_GET_LOCAL_ADDRS, 	/* Get all local addresss. */
+#define SCTP_GET_LOCAL_ADDRS	SCTP_GET_LOCAL_ADDRS
+	SCTP_SOCKOPT_CONNECTX, /* CONNECTX requests. NEW implementation */
+#define SCTP_SOCKOPT_CONNECTX	SCTP_SOCKOPT_CONNECTX
+	SCTP_SOCKOPT_CONNECTX3, /* CONNECTX requests. (new implementation) */
+#define SCTP_SOCKOPT_CONNECTX3	SCTP_SOCKOPT_CONNECTX3
+	SCTP_GET_ASSOC, /* Get min association info */
+#define SCTP_GET_ASSOC	SCTP_GET_ASSOC
+	SCTP_SET_ASSOC, /* Get min association info */
+#define SCTP_SET_ASSOC	SCTP_SET_ASSOC
 };
 
-#define SCTP_MIB_MAX    __SCTP_MIB_MAX
-struct sctp_mib {
-        unsigned long   mibs[SCTP_MIB_MAX];
-};
-
-/* helper function to track stats about max rto and related transport */
-static inline void sctp_max_rto(struct sctp_association *asoc,
-				struct sctp_transport *trans)
-{
-	if (asoc->stats.max_obs_rto < (__u64)trans->rto) {
-		asoc->stats.max_obs_rto = trans->rto;
-		memset(&asoc->stats.obs_rto_ipaddr, 0,
-			sizeof(struct sockaddr_storage));
-		memcpy(&asoc->stats.obs_rto_ipaddr, &trans->ipaddr,
-			trans->af_specific->sockaddr_len);
-	}
-}
-
-/* Print debugging messages.  */
-#if SCTP_DEBUG
-extern int sctp_debug_flag;
-#define SCTP_DEBUG_PRINTK(fmt, args...)			\
-do {							\
-	if (sctp_debug_flag)				\
-		printk(KERN_DEBUG pr_fmt(fmt), ##args);	\
-} while (0)
-#define SCTP_DEBUG_PRINTK_CONT(fmt, args...)		\
-do {							\
-	if (sctp_debug_flag)				\
-		pr_cont(fmt, ##args);			\
-} while (0)
-#define SCTP_DEBUG_PRINTK_IPADDR(fmt_lead, fmt_trail,			\
-				 args_lead, addr, args_trail...)	\
-do {									\
-	const union sctp_addr *_addr = (addr);				\
-	if (sctp_debug_flag) {						\
-		if (_addr->sa.sa_family == AF_INET6) {			\
-			printk(KERN_DEBUG				\
-			       pr_fmt(fmt_lead "%pI6" fmt_trail),	\
-			       args_lead,				\
-			       &_addr->v6.sin6_addr,			\
-			       args_trail);				\
-		} else {						\
-			printk(KERN_DEBUG				\
-			       pr_fmt(fmt_lead "%pI4" fmt_trail),	\
-			       args_lead,				\
-			       &_addr->v4.sin_addr.s_addr,		\
-			       args_trail);				\
-		}							\
-	}								\
-} while (0)
-#define SCTP_ENABLE_DEBUG { sctp_debug_flag = 1; }
-#define SCTP_DISABLE_DEBUG { sctp_debug_flag = 0; }
-
-#define SCTP_ASSERT(expr, str, func) \
-	if (!(expr)) { \
-		SCTP_DEBUG_PRINTK("Assertion Failed: %s(%s) at %s:%s:%d\n", \
-			str, (#expr), __FILE__, __func__, __LINE__); \
-		func; \
-	}
-
-#else	/* SCTP_DEBUG */
-
-#define SCTP_DEBUG_PRINTK(whatever...)
-#define SCTP_DEBUG_PRINTK_CONT(fmt, args...)
-#define SCTP_DEBUG_PRINTK_IPADDR(whatever...)
-#define SCTP_ENABLE_DEBUG
-#define SCTP_DISABLE_DEBUG
-#define SCTP_ASSERT(expr, str, func)
-
-#endif /* SCTP_DEBUG */
-
-
 /*
- * Macros for keeping a global reference of object allocations.
- */
-#ifdef CONFIG_SCTP_DBG_OBJCNT
-
-extern atomic_t sctp_dbg_objcnt_sock;
-extern atomic_t sctp_dbg_objcnt_ep;
-extern atomic_t sctp_dbg_objcnt_assoc;
-extern atomic_t sctp_dbg_objcnt_transport;
-extern atomic_t sctp_dbg_objcnt_chunk;
-extern atomic_t sctp_dbg_objcnt_bind_addr;
-extern atomic_t sctp_dbg_objcnt_bind_bucket;
-extern atomic_t sctp_dbg_objcnt_addr;
-extern atomic_t sctp_dbg_objcnt_ssnmap;
-extern atomic_t sctp_dbg_objcnt_datamsg;
-extern atomic_t sctp_dbg_objcnt_keys;
-
-/* Macros to atomically increment/decrement objcnt counters.  */
-#define SCTP_DBG_OBJCNT_INC(name) \
-atomic_inc(&sctp_dbg_objcnt_## name)
-#define SCTP_DBG_OBJCNT_DEC(name) \
-atomic_dec(&sctp_dbg_objcnt_## name)
-#define SCTP_DBG_OBJCNT(name) \
-atomic_t sctp_dbg_objcnt_## name = ATOMIC_INIT(0)
-
-/* Macro to help create new entries in in the global array of
- * objcnt counters.
- */
-#define SCTP_DBG_OBJCNT_ENTRY(name) \
-{.label= #name, .counter= &sctp_dbg_objcnt_## name}
-
-void sctp_dbg_objcnt_init(struct net *);
-void sctp_dbg_objcnt_exit(struct net *);
-
-#else
-
-#define SCTP_DBG_OBJCNT_INC(name)
-#define SCTP_DBG_OBJCNT_DEC(name)
-
-static inline void sctp_dbg_objcnt_init(struct net *net) { return; }
-static inline void sctp_dbg_objcnt_exit(struct net *net) { return; }
-
-#endif /* CONFIG_SCTP_DBG_OBJCOUNT */
-
-#if defined CONFIG_SYSCTL
-void sctp_sysctl_register(void);
-void sctp_sysctl_unregister(void);
-int sctp_sysctl_net_register(struct net *net);
-void sctp_sysctl_net_unregister(struct net *net);
-#else
-static inline void sctp_sysctl_register(void) { return; }
-static inline void sctp_sysctl_unregister(void) { return; }
-static inline int sctp_sysctl_net_register(struct net *net) { return 0; }
-static inline void sctp_sysctl_net_unregister(struct net *net) { return; }
-#endif
-
-/* Size of Supported Address Parameter for 'x' address types. */
-#define SCTP_SAT_LEN(x) (sizeof(struct sctp_paramhdr) + (x) * sizeof(__u16))
-
-#if IS_ENABLED(CONFIG_IPV6)
-
-void sctp_v6_pf_init(void);
-void sctp_v6_pf_exit(void);
-int sctp_v6_protosw_init(void);
-void sctp_v6_protosw_exit(void);
-int sctp_v6_add_protocol(void);
-void sctp_v6_del_protocol(void);
-
-#else /* #ifdef defined(CONFIG_IPV6) */
-
-static inline void sctp_v6_pf_init(void) { return; }
-static inline void sctp_v6_pf_exit(void) { return; }
-static inline int sctp_v6_protosw_init(void) { return 0; }
-static inline void sctp_v6_protosw_exit(void) { return; }
-static inline int sctp_v6_add_protocol(void) { return 0; }
-static inline void sctp_v6_del_protocol(void) { return; }
-
-#endif /* #if defined(CONFIG_IPV6) */
-
-
-/* Map an association to an assoc_id. */
-static inline sctp_assoc_t sctp_assoc2id(const struct sctp_association *asoc)
+typedef struct sctp_act
 {
-	return asoc ? asoc->assoc_id : 0;
-}
-
-/* Look up the association by its id.  */
-struct sctp_association *sctp_id2assoc(struct sock *sk, sctp_assoc_t id);
-
-int sctp_do_peeloff(struct sock *sk, sctp_assoc_t id, struct socket **sockp);
-
-/* A macro to walk a list of skbs.  */
-#define sctp_skb_for_each(pos, head, tmp) \
-	skb_queue_walk_safe(head, pos, tmp)
-
-/* A helper to append an entire skb list (list) to another (head). */
-static inline void sctp_skb_list_tail(struct sk_buff_head *list,
-				      struct sk_buff_head *head)
-{
-	unsigned long flags;
-
-	sctp_spin_lock_irqsave(&head->lock, flags);
-	sctp_spin_lock(&list->lock);
-
-	skb_queue_splice_tail_init(list, head);
-
-	sctp_spin_unlock(&list->lock);
-	sctp_spin_unlock_irqrestore(&head->lock, flags);
-}
-
-/**
- *	sctp_list_dequeue - remove from the head of the queue
- *	@list: list to dequeue from
+	union sctp_addr addr;
+	struct sctp_cookie cookie;
+	__u8 secret_key[SCTP_HOW_MANY_SECRETS][SCTP_SECRET_SIZE];
+	int current_key;
+}tAct;
+*/
+/*
+ * 5.2.1 SCTP Initiation Structure (SCTP_INIT)
  *
- *	Remove the head of the list. The head item is
- *	returned or %NULL if the list is empty.
+ *   This cmsghdr structure provides information for initializing new
+ *   SCTP associations with sendmsg().  The SCTP_INITMSG socket option
+ *   uses this same data structure.  This structure is not used for
+ *   recvmsg().
+ *
+ *   cmsg_level    cmsg_type      cmsg_data[]
+ *   ------------  ------------   ----------------------
+ *   IPPROTO_SCTP  SCTP_INIT      struct sctp_initmsg
+ *
+ */
+struct sctp_initmsg {
+	__u16 sinit_num_ostreams;
+	__u16 sinit_max_instreams;
+	__u16 sinit_max_attempts;
+	__u16 sinit_max_init_timeo;
+};
+
+/*
+ * 5.2.2 SCTP Header Information Structure (SCTP_SNDRCV)
+ *
+ *   This cmsghdr structure specifies SCTP options for sendmsg() and
+ *   describes SCTP header information about a received message through
+ *   recvmsg().
+ *
+ *   cmsg_level    cmsg_type      cmsg_data[]
+ *   ------------  ------------   ----------------------
+ *   IPPROTO_SCTP  SCTP_SNDRCV    struct sctp_sndrcvinfo
+ *
+ */
+struct sctp_sndrcvinfo {
+	__u16 sinfo_stream;
+	__u16 sinfo_ssn;
+	__u16 sinfo_flags;
+	__u32 sinfo_ppid;
+	__u32 sinfo_context;
+	__u32 sinfo_timetolive;
+	__u32 sinfo_tsn;
+	__u32 sinfo_cumtsn;
+	sctp_assoc_t sinfo_assoc_id;
+};
+
+/*
+ *  sinfo_flags: 16 bits (unsigned integer)
+ *
+ *   This field may contain any of the following flags and is composed of
+ *   a bitwise OR of these values.
  */
 
-static inline struct list_head *sctp_list_dequeue(struct list_head *list)
-{
-	struct list_head *result = NULL;
+enum sctp_sinfo_flags {
+	SCTP_UNORDERED = 1,  /* Send/receive message unordered. */
+	SCTP_ADDR_OVER = 2,  /* Override the primary destination. */
+	SCTP_ABORT=4,        /* Send an ABORT message to the peer. */
+	SCTP_EOF=MSG_FIN,    /* Initiate graceful shutdown process. */
+};
 
-	if (list->next != list) {
-		result = list->next;
-		list->next = result->next;
-		list->next->prev = list;
-		INIT_LIST_HEAD(result);
-	}
-	return result;
-}
 
-/* SCTP version of skb_set_owner_r.  We need this one because
- * of the way we have to do receive buffer accounting on bundled
- * chunks.
+typedef union {
+	__u8   			raw;
+	struct sctp_initmsg	init;
+	struct sctp_sndrcvinfo	sndrcv;
+} sctp_cmsg_data_t;
+
+/* These are cmsg_types.  */
+typedef enum sctp_cmsg_type {
+	SCTP_INIT,              /* 5.2.1 SCTP Initiation Structure */
+#define SCTP_INIT SCTP_INIT
+	SCTP_SNDRCV,            /* 5.2.2 SCTP Header Information Structure */
+#define SCTP_SNDRCV SCTP_SNDRCV
+} sctp_cmsg_t;
+
+
+/*
+ * 5.3.1.1 SCTP_ASSOC_CHANGE
+ *
+ *   Communication notifications inform the ULP that an SCTP association
+ *   has either begun or ended. The identifier for a new association is
+ *   provided by this notificaion. The notification information has the
+ *   following format:
+ *
  */
-static inline void sctp_skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
-{
-	struct sctp_ulpevent *event = sctp_skb2event(skb);
+struct sctp_assoc_change {
+	__u16 sac_type;
+	__u16 sac_flags;
+	__u32 sac_length;
+	__u16 sac_state;
+	__u16 sac_error;
+	__u16 sac_outbound_streams;
+	__u16 sac_inbound_streams;
+	sctp_assoc_t sac_assoc_id;
+	__u8 sac_info[0];
+};
 
-	skb_orphan(skb);
-	skb->sk = sk;
-	skb->destructor = sctp_sock_rfree;
-	atomic_add(event->rmem_len, &sk->sk_rmem_alloc);
-	/*
-	 * This mimics the behavior of skb_set_owner_r
-	 */
-	sk->sk_forward_alloc -= event->rmem_len;
-}
-
-/* Tests if the list has one and only one entry. */
-static inline int sctp_list_single_entry(struct list_head *head)
-{
-	return (head->next != head) && (head->next == head->prev);
-}
-
-/* Generate a random jitter in the range of -50% ~ +50% of input RTO. */
-static inline __s32 sctp_jitter(__u32 rto)
-{
-	static __u32 sctp_rand;
-	__s32 ret;
-
-	/* Avoid divide by zero. */
-	if (!rto)
-		rto = 1;
-
-	sctp_rand += jiffies;
-	sctp_rand ^= (sctp_rand << 12);
-	sctp_rand ^= (sctp_rand >> 20);
-
-	/* Choose random number from 0 to rto, then move to -50% ~ +50%
-	 * of rto.
-	 */
-	ret = sctp_rand % rto - (rto >> 1);
-	return ret;
-}
-
-/* Break down data chunks at this point.  */
-static inline int sctp_frag_point(const struct sctp_association *asoc, int pmtu)
-{
-	struct sctp_sock *sp = sctp_sk(asoc->base.sk);
-	int frag = pmtu;
-
-	frag -= sp->pf->af->net_header_len;
-	frag -= sizeof(struct sctphdr) + sizeof(struct sctp_data_chunk);
-
-	if (asoc->user_frag)
-		frag = min_t(int, frag, asoc->user_frag);
-
-	frag = min_t(int, frag, SCTP_MAX_CHUNK_LEN);
-
-	return frag;
-}
-
-static inline void sctp_assoc_pending_pmtu(struct sock *sk, struct sctp_association *asoc)
-{
-
-	sctp_assoc_sync_pmtu(sk, asoc);
-	asoc->pmtu_pending = 0;
-}
-
-/* Walk through a list of TLV parameters.  Don't trust the
- * individual parameter lengths and instead depend on
- * the chunk length to indicate when to stop.  Make sure
- * there is room for a param header too.
+/*
+ *   sac_state: 32 bits (signed integer)
+ *
+ *   This field holds one of a number of values that communicate the
+ *   event that happened to the association.  They include:
+ *
+ *   Note:  The following state names deviate from the API draft as
+ *   the names clash too easily with other kernel symbols.
  */
-#define sctp_walk_params(pos, chunk, member)\
-_sctp_walk_params((pos), (chunk), ntohs((chunk)->chunk_hdr.length), member)
+enum sctp_sac_state {
+	SCTP_COMM_UP,
+	SCTP_COMM_LOST,
+	SCTP_RESTART,
+	SCTP_SHUTDOWN_COMP,
+	SCTP_CANT_STR_ASSOC,
+};
 
-#define _sctp_walk_params(pos, chunk, end, member)\
-for (pos.v = chunk->member;\
-     pos.v <= (void *)chunk + end - ntohs(pos.p->length) &&\
-     ntohs(pos.p->length) >= sizeof(sctp_paramhdr_t);\
-     pos.v += WORD_ROUND(ntohs(pos.p->length)))
-
-#define sctp_walk_errors(err, chunk_hdr)\
-_sctp_walk_errors((err), (chunk_hdr), ntohs((chunk_hdr)->length))
-
-#define _sctp_walk_errors(err, chunk_hdr, end)\
-for (err = (sctp_errhdr_t *)((void *)chunk_hdr + \
-	    sizeof(sctp_chunkhdr_t));\
-     (void *)err <= (void *)chunk_hdr + end - ntohs(err->length) &&\
-     ntohs(err->length) >= sizeof(sctp_errhdr_t); \
-     err = (sctp_errhdr_t *)((void *)err + WORD_ROUND(ntohs(err->length))))
-
-#define sctp_walk_fwdtsn(pos, chunk)\
-_sctp_walk_fwdtsn((pos), (chunk), ntohs((chunk)->chunk_hdr->length) - sizeof(struct sctp_fwdtsn_chunk))
-
-#define _sctp_walk_fwdtsn(pos, chunk, end)\
-for (pos = chunk->subh.fwdtsn_hdr->skip;\
-     (void *)pos <= (void *)chunk->subh.fwdtsn_hdr->skip + end - sizeof(struct sctp_fwdtsn_skip);\
-     pos++)
-
-/* Round an int up to the next multiple of 4.  */
-#define WORD_ROUND(s) (((s)+3)&~3)
-
-/* Make a new instance of type.  */
-#define t_new(type, flags)	(type *)kzalloc(sizeof(type), flags)
-
-/* Compare two timevals.  */
-#define tv_lt(s, t) \
-   (s.tv_sec < t.tv_sec || (s.tv_sec == t.tv_sec && s.tv_usec < t.tv_usec))
-
-/* Add tv1 to tv2. */
-#define TIMEVAL_ADD(tv1, tv2) \
-({ \
-        suseconds_t usecs = (tv2).tv_usec + (tv1).tv_usec; \
-        time_t secs = (tv2).tv_sec + (tv1).tv_sec; \
-\
-        if (usecs >= 1000000) { \
-                usecs -= 1000000; \
-                secs++; \
-        } \
-        (tv2).tv_sec = secs; \
-        (tv2).tv_usec = usecs; \
-})
-
-/* External references. */
-
-extern struct proto sctp_prot;
-extern struct proto sctpv6_prot;
-void sctp_put_port(struct sock *sk);
-
-extern struct idr sctp_assocs_id;
-extern spinlock_t sctp_assocs_id_lock;
-
-/* Static inline functions. */
-
-/* Convert from an IP version number to an Address Family symbol.  */
-static inline int ipver2af(__u8 ipver)
-{
-	switch (ipver) {
-	case 4:
-	        return  AF_INET;
-	case 6:
-		return AF_INET6;
-	default:
-		return 0;
-	}
-}
-
-/* Convert from an address parameter type to an address family.  */
-static inline int param_type2af(__be16 type)
-{
-	switch (type) {
-	case SCTP_PARAM_IPV4_ADDRESS:
-	        return  AF_INET;
-	case SCTP_PARAM_IPV6_ADDRESS:
-		return AF_INET6;
-	default:
-		return 0;
-	}
-}
-
-/* Perform some sanity checks. */
-static inline int sctp_sanity_check(void)
-{
-	SCTP_ASSERT(sizeof(struct sctp_ulpevent) <=
-		    sizeof(((struct sk_buff *)0)->cb),
-		    "SCTP: ulpevent does not fit in skb!\n", return 0);
-
-	return 1;
-}
-
-/* Warning: The following hash functions assume a power of two 'size'. */
-/* This is the hash function for the SCTP port hash table. */
-static inline int sctp_phashfn(struct net *net, __u16 lport)
-{
-	return (net_hash_mix(net) + lport) & (sctp_port_hashsize - 1);
-}
-
-/* This is the hash function for the endpoint hash table. */
-static inline int sctp_ep_hashfn(struct net *net, __u16 lport)
-{
-	return (net_hash_mix(net) + lport) & (sctp_ep_hashsize - 1);
-}
-
-/* This is the hash function for the association hash table. */
-static inline int sctp_assoc_hashfn(struct net *net, __u16 lport, __u16 rport)
-{
-	int h = (lport << 16) + rport + net_hash_mix(net);
-	h ^= h>>8;
-	return h & (sctp_assoc_hashsize - 1);
-}
-
-/* This is the hash function for the association hash table.  This is
- * not used yet, but could be used as a better hash function when
- * we have a vtag.
+/*
+ * 5.3.1.2 SCTP_PEER_ADDR_CHANGE
+ *
+ *   When a destination address on a multi-homed peer encounters a change
+ *   an interface details event is sent.  The information has the
+ *   following structure:
  */
-static inline int sctp_vtag_hashfn(__u16 lport, __u16 rport, __u32 vtag)
-{
-	int h = (lport << 16) + rport;
-	h ^= vtag;
-	return h & (sctp_assoc_hashsize - 1);
-}
+struct sctp_paddr_change {
+	__u16 spc_type;
+	__u16 spc_flags;
+	__u32 spc_length;
+	struct sockaddr_storage spc_aaddr;
+	int spc_state;
+	int spc_error;
+	sctp_assoc_t spc_assoc_id;
+} __attribute__((packed, aligned(4)));
 
-#define sctp_for_each_hentry(epb, node, head) \
-	hlist_for_each_entry(epb, node, head, node)
-
-/* Is a socket of this style? */
-#define sctp_style(sk, style) __sctp_style((sk), (SCTP_SOCKET_##style))
-static inline int __sctp_style(const struct sock *sk, sctp_socket_type_t style)
-{
-	return sctp_sk(sk)->type == style;
-}
-
-/* Is the association in this state? */
-#define sctp_state(asoc, state) __sctp_state((asoc), (SCTP_STATE_##state))
-static inline int __sctp_state(const struct sctp_association *asoc,
-			       sctp_state_t state)
-{
-	return asoc->state == state;
-}
-
-/* Is the socket in this state? */
-#define sctp_sstate(sk, state) __sctp_sstate((sk), (SCTP_SS_##state))
-static inline int __sctp_sstate(const struct sock *sk, sctp_sock_state_t state)
-{
-	return sk->sk_state == state;
-}
-
-/* Map v4-mapped v6 address back to v4 address */
-static inline void sctp_v6_map_v4(union sctp_addr *addr)
-{
-	addr->v4.sin_family = AF_INET;
-	addr->v4.sin_port = addr->v6.sin6_port;
-	addr->v4.sin_addr.s_addr = addr->v6.sin6_addr.s6_addr32[3];
-}
-
-/* Map v4 address to v4-mapped v6 address */
-static inline void sctp_v4_map_v6(union sctp_addr *addr)
-{
-	addr->v6.sin6_family = AF_INET6;
-	addr->v6.sin6_port = addr->v4.sin_port;
-	addr->v6.sin6_addr.s6_addr32[3] = addr->v4.sin_addr.s_addr;
-	addr->v6.sin6_addr.s6_addr32[0] = 0;
-	addr->v6.sin6_addr.s6_addr32[1] = 0;
-	addr->v6.sin6_addr.s6_addr32[2] = htonl(0x0000ffff);
-}
-
-/* The cookie is always 0 since this is how it's used in the
- * pmtu code.
+/*
+ *    spc_state:  32 bits (signed integer)
+ *
+ *   This field holds one of a number of values that communicate the
+ *   event that happened to the address.  They include:
  */
-static inline struct dst_entry *sctp_transport_dst_check(struct sctp_transport *t)
-{
-	if (t->dst && !dst_check(t->dst, 0)) {
-		dst_release(t->dst);
-		t->dst = NULL;
-	}
+enum sctp_spc_state {
+	SCTP_ADDR_AVAILABLE,
+	SCTP_ADDR_UNREACHABLE,
+	SCTP_ADDR_REMOVED,
+	SCTP_ADDR_ADDED,
+	SCTP_ADDR_MADE_PRIM,
+	SCTP_ADDR_CONFIRMED,
+};
 
-	return t->dst;
-}
 
-#endif /* __net_sctp_h__ */
+/*
+ * 5.3.1.3 SCTP_REMOTE_ERROR
+ *
+ *   A remote peer may send an Operational Error message to its peer.
+ *   This message indicates a variety of error conditions on an
+ *   association. The entire error TLV as it appears on the wire is
+ *   included in a SCTP_REMOTE_ERROR event.  Please refer to the SCTP
+ *   specification [SCTP] and any extensions for a list of possible
+ *   error formats. SCTP error TLVs have the format:
+ */
+struct sctp_remote_error {
+	__u16 sre_type;
+	__u16 sre_flags;
+	__u32 sre_length;
+	__u16 sre_error;
+	sctp_assoc_t sre_assoc_id;
+	__u8 sre_data[0];
+};
+
+
+/*
+ * 5.3.1.4 SCTP_SEND_FAILED
+ *
+ *   If SCTP cannot deliver a message it may return the message as a
+ *   notification.
+ */
+struct sctp_send_failed {
+	__u16 ssf_type;
+	__u16 ssf_flags;
+	__u32 ssf_length;
+	__u32 ssf_error;
+	struct sctp_sndrcvinfo ssf_info;
+	sctp_assoc_t ssf_assoc_id;
+	__u8 ssf_data[0];
+};
+
+/*
+ *   ssf_flags: 16 bits (unsigned integer)
+ *
+ *   The flag value will take one of the following values
+ *
+ *   SCTP_DATA_UNSENT  - Indicates that the data was never put on
+ *                       the wire.
+ *
+ *   SCTP_DATA_SENT    - Indicates that the data was put on the wire.
+ *                       Note that this does not necessarily mean that the
+ *                       data was (or was not) successfully delivered.
+ */
+enum sctp_ssf_flags {
+	SCTP_DATA_UNSENT,
+	SCTP_DATA_SENT,
+};
+
+/*
+ * 5.3.1.5 SCTP_SHUTDOWN_EVENT
+ *
+ *   When a peer sends a SHUTDOWN, SCTP delivers this notification to
+ *   inform the application that it should cease sending data.
+ */
+struct sctp_shutdown_event {
+	__u16 sse_type;
+	__u16 sse_flags;
+	__u32 sse_length;
+	sctp_assoc_t sse_assoc_id;
+};
+
+/*
+ * 5.3.1.6 SCTP_ADAPTATION_INDICATION
+ *
+ *   When a peer sends a Adaptation Layer Indication parameter , SCTP
+ *   delivers this notification to inform the application
+ *   that of the peers requested adaptation layer.
+ */
+struct sctp_adaptation_event {
+	__u16 sai_type;
+	__u16 sai_flags;
+	__u32 sai_length;
+	__u32 sai_adaptation_ind;
+	sctp_assoc_t sai_assoc_id;
+};
+
+/*
+ * 5.3.1.7 SCTP_PARTIAL_DELIVERY_EVENT
+ *
+ *   When a receiver is engaged in a partial delivery of a
+ *   message this notification will be used to indicate
+ *   various events.
+ */
+struct sctp_pdapi_event {
+	__u16 pdapi_type;
+	__u16 pdapi_flags;
+	__u32 pdapi_length;
+	__u32 pdapi_indication;
+	sctp_assoc_t pdapi_assoc_id;
+};
+
+enum { SCTP_PARTIAL_DELIVERY_ABORTED=0, };
+
+/*
+* 5.3.1.8.  SCTP_AUTHENTICATION_EVENT
+*
+*  When a receiver is using authentication this message will provide
+*  notifications regarding new keys being made active as well as errors.
+*/
+
+struct sctp_authkey_event {
+	__u16 auth_type;
+	__u16 auth_flags;
+	__u32 auth_length;
+	__u16 auth_keynumber;
+	__u16 auth_altkeynumber;
+	__u32 auth_indication;
+	sctp_assoc_t auth_assoc_id;
+};
+
+enum { SCTP_AUTH_NEWKEY = 0, };
+
+
+/*
+ * Described in Section 7.3
+ *   Ancillary Data and Notification Interest Options
+ */
+struct sctp_event_subscribe {
+	__u8 sctp_data_io_event;
+	__u8 sctp_association_event;
+	__u8 sctp_address_event;
+	__u8 sctp_send_failure_event;
+	__u8 sctp_peer_error_event;
+	__u8 sctp_shutdown_event;
+	__u8 sctp_partial_delivery_event;
+	__u8 sctp_adaptation_layer_event;
+	__u8 sctp_authentication_event;
+};
+
+/*
+ * 5.3.1 SCTP Notification Structure
+ *
+ *   The notification structure is defined as the union of all
+ *   notification types.
+ *
+ */
+union sctp_notification {
+	struct {
+		__u16 sn_type;             /* Notification type. */
+		__u16 sn_flags;
+		__u32 sn_length;
+	} sn_header;
+	struct sctp_assoc_change sn_assoc_change;
+	struct sctp_paddr_change sn_paddr_change;
+	struct sctp_remote_error sn_remote_error;
+	struct sctp_send_failed sn_send_failed;
+	struct sctp_shutdown_event sn_shutdown_event;
+	struct sctp_adaptation_event sn_adaptation_event;
+	struct sctp_pdapi_event sn_pdapi_event;
+	struct sctp_authkey_event sn_authkey_event;
+};
+
+/* Section 5.3.1
+ * All standard values for sn_type flags are greater than 2^15.
+ * Values from 2^15 and down are reserved.
+ */
+
+enum sctp_sn_type {
+	SCTP_SN_TYPE_BASE     = (1<<15),
+	SCTP_ASSOC_CHANGE,
+	SCTP_PEER_ADDR_CHANGE,
+	SCTP_SEND_FAILED,
+	SCTP_REMOTE_ERROR,
+	SCTP_SHUTDOWN_EVENT,
+	SCTP_PARTIAL_DELIVERY_EVENT,
+	SCTP_ADAPTATION_INDICATION,
+	SCTP_AUTHENTICATION_INDICATION,
+};
+
+/* Notification error codes used to fill up the error fields in some
+ * notifications.
+ * SCTP_PEER_ADDRESS_CHAGE 	: spc_error
+ * SCTP_ASSOC_CHANGE		: sac_error
+ * These names should be potentially included in the draft 04 of the SCTP
+ * sockets API specification.
+ */
+typedef enum sctp_sn_error {
+	SCTP_FAILED_THRESHOLD,
+	SCTP_RECEIVED_SACK,
+	SCTP_HEARTBEAT_SUCCESS,
+	SCTP_RESPONSE_TO_USER_REQ,
+	SCTP_INTERNAL_ERROR,
+	SCTP_SHUTDOWN_GUARD_EXPIRES,
+	SCTP_PEER_FAULTY,
+} sctp_sn_error_t;
+
+/*
+ * 7.1.1 Retransmission Timeout Parameters (SCTP_RTOINFO)
+ *
+ *   The protocol parameters used to initialize and bound retransmission
+ *   timeout (RTO) are tunable.  See [SCTP] for more information on how
+ *   these parameters are used in RTO calculation. 
+ */
+struct sctp_rtoinfo {
+	sctp_assoc_t	srto_assoc_id;
+	__u32		srto_initial;
+	__u32		srto_max;
+	__u32		srto_min;
+};
+
+/*
+ * 7.1.2 Association Parameters (SCTP_ASSOCINFO)
+ *
+ *   This option is used to both examine and set various association and
+ *   endpoint parameters.
+ */
+struct sctp_assocparams {
+	sctp_assoc_t	sasoc_assoc_id;
+	__u16		sasoc_asocmaxrxt;
+	__u16		sasoc_number_peer_destinations;
+	__u32		sasoc_peer_rwnd;
+	__u32		sasoc_local_rwnd;
+	__u32		sasoc_cookie_life;
+};
+
+/*
+ * 7.1.9 Set Peer Primary Address (SCTP_SET_PEER_PRIMARY_ADDR)
+ *
+ *  Requests that the peer mark the enclosed address as the association
+ *  primary. The enclosed address must be one of the association's
+ *  locally bound addresses. The following structure is used to make a
+ *   set primary request:
+ */
+struct sctp_setpeerprim {
+	sctp_assoc_t            sspp_assoc_id;
+	struct sockaddr_storage sspp_addr;
+} __attribute__((packed, aligned(4)));
+
+/*
+ * 7.1.10 Set Primary Address (SCTP_PRIMARY_ADDR)
+ *
+ *  Requests that the local SCTP stack use the enclosed peer address as
+ *  the association primary. The enclosed address must be one of the
+ *  association peer's addresses. The following structure is used to
+ *  make a set peer primary request:
+ */
+struct sctp_setprim {
+	sctp_assoc_t            ssp_assoc_id;
+	struct sockaddr_storage ssp_addr;
+} __attribute__((packed, aligned(4)));
+
+/* For backward compatibility use, define the old name too */
+#define sctp_prim sctp_setprim
+
+/*
+ * 7.1.11 Set Adaptation Layer Indicator (SCTP_ADAPTATION_LAYER)
+ *
+ * Requests that the local endpoint set the specified Adaptation Layer
+ * Indication parameter for all future INIT and INIT-ACK exchanges.
+ */
+struct sctp_setadaptation {
+	__u32	ssb_adaptation_ind;
+};
+
+/*
+ * 7.1.13 Peer Address Parameters  (SCTP_PEER_ADDR_PARAMS)
+ *
+ *   Applications can enable or disable heartbeats for any peer address
+ *   of an association, modify an address's heartbeat interval, force a
+ *   heartbeat to be sent immediately, and adjust the address's maximum
+ *   number of retransmissions sent before an address is considered
+ *   unreachable. The following structure is used to access and modify an
+ *   address's parameters:
+ */
+enum  sctp_spp_flags {
+	SPP_HB_ENABLE = 1<<0,		/*Enable heartbeats*/
+	SPP_HB_DISABLE = 1<<1,		/*Disable heartbeats*/
+	SPP_HB = SPP_HB_ENABLE | SPP_HB_DISABLE,
+	SPP_HB_DEMAND = 1<<2,		/*Send heartbeat immediately*/
+	SPP_PMTUD_ENABLE = 1<<3,	/*Enable PMTU discovery*/
+	SPP_PMTUD_DISABLE = 1<<4,	/*Disable PMTU discovery*/
+	SPP_PMTUD = SPP_PMTUD_ENABLE | SPP_PMTUD_DISABLE,
+	SPP_SACKDELAY_ENABLE = 1<<5,	/*Enable SACK*/
+	SPP_SACKDELAY_DISABLE = 1<<6,	/*Disable SACK*/
+	SPP_SACKDELAY = SPP_SACKDELAY_ENABLE | SPP_SACKDELAY_DISABLE,
+	SPP_HB_TIME_IS_ZERO = 1<<7,	/* Set HB delay to 0 */
+};
+
+struct sctp_paddrparams {
+	sctp_assoc_t		spp_assoc_id;
+	struct sockaddr_storage	spp_address;
+	__u32			spp_hbinterval;
+	__u16			spp_pathmaxrxt;
+	__u32			spp_pathmtu;
+	__u32			spp_sackdelay;
+	__u32			spp_flags;
+} __attribute__((packed, aligned(4)));
+
+/*
+ * 7.1.18.  Add a chunk that must be authenticated (SCTP_AUTH_CHUNK)
+ *
+ * This set option adds a chunk type that the user is requesting to be
+ * received only in an authenticated way.  Changes to the list of chunks
+ * will only effect future associations on the socket.
+ */
+struct sctp_authchunk {
+	__u8		sauth_chunk;
+};
+
+/*
+ * 7.1.19.  Get or set the list of supported HMAC Identifiers (SCTP_HMAC_IDENT)
+ *
+ * This option gets or sets the list of HMAC algorithms that the local
+ * endpoint requires the peer to use.
+*/
+
+enum {
+	SCTP_AUTH_HMAC_ID_SHA1 = 1,
+	SCTP_AUTH_HMAC_ID_SHA256 = 3,
+};
+
+struct sctp_hmacalgo {
+	__u32		shmac_number_of_idents;
+	__u16		shmac_idents[];
+};
+
+/*
+ * 7.1.20.  Set a shared key (SCTP_AUTH_KEY)
+ *
+ * This option will set a shared secret key which is used to build an
+ * association shared key.
+ */
+struct sctp_authkey {
+	sctp_assoc_t	sca_assoc_id;
+	__u16		sca_keynumber;
+	__u16		sca_keylength;
+	__u8		sca_key[];
+};
+
+/*
+ * 7.1.21.  Get or set the active shared key (SCTP_AUTH_ACTIVE_KEY)
+ *
+ * This option will get or set the active shared key to be used to build
+ * the association shared key.
+ */
+
+struct sctp_authkeyid {
+	sctp_assoc_t	scact_assoc_id;
+	__u16		scact_keynumber;
+};
+
+
+/* 7.1.23. Delayed Ack Timer (SCTP_DELAYED_ACK_TIME)
+ *
+ *   This options will get or set the delayed ack timer.  The time is set
+ *   in milliseconds.  If the assoc_id is 0, then this sets or gets the
+ *   endpoints default delayed ack timer value.  If the assoc_id field is
+ *   non-zero, then the set or get effects the specified association.
+ */
+struct sctp_assoc_value {
+    sctp_assoc_t            assoc_id;
+    uint32_t                assoc_value;
+};
+
+/*
+ * 7.2.2 Peer Address Information
+ *
+ *   Applications can retrieve information about a specific peer address
+ *   of an association, including its reachability state, congestion
+ *   window, and retransmission timer values.  This information is
+ *   read-only. The following structure is used to access this
+ *   information:
+ */
+struct sctp_paddrinfo {
+	sctp_assoc_t		spinfo_assoc_id;
+	struct sockaddr_storage	spinfo_address;
+	__s32			spinfo_state;
+	__u32			spinfo_cwnd;
+	__u32			spinfo_srtt;
+	__u32			spinfo_rto;
+	__u32			spinfo_mtu;
+} __attribute__((packed, aligned(4)));
+
+/* Peer addresses's state. */
+/* UNKNOWN: Peer address passed by the upper layer in sendmsg or connect[x]
+ * calls.
+ * UNCONFIRMED: Peer address received in INIT/INIT-ACK address parameters.
+ *              Not yet confirmed by a heartbeat and not available for data
+ *		transfers.
+ * ACTIVE : Peer address confirmed, active and available for data transfers.
+ * INACTIVE: Peer address inactive and not available for data transfers.
+ */
+enum sctp_spinfo_state {
+	SCTP_INACTIVE,
+	SCTP_ACTIVE,
+	SCTP_UNCONFIRMED
+};
+
+/*
+ * 7.2.1 Association Status (SCTP_STATUS)
+ *
+ *   Applications can retrieve current status information about an
+ *   association, including association state, peer receiver window size,
+ *   number of unacked data chunks, and number of data chunks pending
+ *   receipt.  This information is read-only.  The following structure is
+ *   used to access this information:
+ */
+struct sctp_status {
+	sctp_assoc_t		sstat_assoc_id;
+	__s32			sstat_state;
+	__u32			sstat_rwnd;
+	__u16			sstat_unackdata;
+	__u16			sstat_penddata;
+	__u16			sstat_instrms;
+	__u16			sstat_outstrms;
+	__u32			sstat_fragmentation_point;
+	struct sctp_paddrinfo	sstat_primary;
+};
+
+/*
+ * 7.2.3.  Get the list of chunks the peer requires to be authenticated
+ *         (SCTP_PEER_AUTH_CHUNKS)
+ *
+ * This option gets a list of chunks for a specified association that
+ * the peer requires to be received authenticated only.
+ */
+struct sctp_authchunks {
+	sctp_assoc_t	gauth_assoc_id;
+	__u32		guth_number_of_chunks;
+	uint8_t        	gauth_chunks[];
+};
+
+/* Association states.  */
+enum sctp_sstat_state {
+	SCTP_EMPTY                = 0,
+	SCTP_CLOSED               = 1,
+	SCTP_COOKIE_WAIT          = 2,
+	SCTP_COOKIE_ECHOED        = 3,
+	SCTP_ESTABLISHED          = 4,
+	SCTP_SHUTDOWN_PENDING     = 5,
+	SCTP_SHUTDOWN_SENT        = 6,
+	SCTP_SHUTDOWN_RECEIVED    = 7,
+	SCTP_SHUTDOWN_ACK_SENT    = 8,
+};
+
+/*
+ * 8.3, 8.5 get all peer/local addresses in an association.
+ * This parameter struct is used by SCTP_GET_PEER_ADDRS and
+ * SCTP_GET_LOCAL_ADDRS socket options used internally to implement
+ * sctp_getpaddrs() and sctp_getladdrs() API. 
+ */
+struct sctp_getaddrs_old {
+	sctp_assoc_t            assoc_id;
+	int			addr_num;
+	struct sockaddr		*addrs;
+};
+struct sctp_getaddrs {
+	sctp_assoc_t		assoc_id; /*input*/
+	__u32			addr_num; /*output*/
+	__u8			addrs[0]; /*output, variable size*/
+};
+
+/* These are bit fields for msghdr->msg_flags.  See section 5.1.  */
+/* On user space Linux, these live in <bits/socket.h> as an enum.  */
+enum sctp_msg_flags {
+	MSG_NOTIFICATION = 0x8000,
+#define MSG_NOTIFICATION MSG_NOTIFICATION
+};
+
+/*
+ * 8.1 sctp_bindx()
+ *
+ * The flags parameter is formed from the bitwise OR of zero or more of the
+ * following currently defined flags:
+ */
+#define SCTP_BINDX_ADD_ADDR 0x01
+#define SCTP_BINDX_REM_ADDR 0x02
+
+/* This is the structure that is passed as an argument(optval) to
+ * getsockopt(SCTP_SOCKOPT_PEELOFF).
+ */
+typedef struct {
+	sctp_assoc_t associd;
+	int sd;
+} sctp_peeloff_arg_t;
+
+
+int sctp_bindx(int sd, struct sockaddr *addrs, int addrcnt, int flags);
+
+int sctp_connectx(int sd, struct sockaddr *addrs, int addrcnt,
+		  sctp_assoc_t *id);
+
+int sctp_peeloff(int sd, sctp_assoc_t assoc_id);
+
+/* Prototype for the library function sctp_opt_info defined in
+ * API 7. Socket Options.
+ */
+int sctp_opt_info(int sd, sctp_assoc_t id, int opt, void *arg, socklen_t *size);
+
+/* Get all peer address on a socket.  This is a new SCTP API
+ * described in the section 8.3 of the Sockets API Extensions for SCTP.
+ * This is implemented using the getsockopt() interface.
+ */
+int sctp_getpaddrs(int sd, sctp_assoc_t id, struct sockaddr **addrs);
+
+/* Frees all resources allocated by sctp_getpaddrs().  This is a new SCTP API
+ * described in the section 8.4 of the Sockets API Extensions for SCTP.
+ */
+int sctp_freepaddrs(struct sockaddr *addrs);
+
+/* Get all locally bound address on a socket.  This is a new SCTP API
+ * described in the section 8.5 of the Sockets API Extensions for SCTP.
+ * This is implemented using the getsockopt() interface.
+ */
+int sctp_getladdrs(int sd, sctp_assoc_t id, struct sockaddr **addrs);
+
+/* Frees all resources allocated by sctp_getladdrs().  This is a new SCTP API
+ * described in the section 8.6 of the Sockets API Extensions for SCTP.
+ */
+int sctp_freeladdrs(struct sockaddr *addrs);
+
+/* This library function assists the user with the advanced features
+ * of SCTP.  This is a new SCTP API described in the section 8.7 of the
+ * Sockets API Extensions for SCTP. This is implemented using the
+ * sendmsg() interface.
+ */
+int sctp_sendmsg(int s, const void *msg, size_t len, struct sockaddr *to,
+		 socklen_t tolen, uint32_t ppid, uint32_t flags,
+		 uint16_t stream_no, uint32_t timetolive, uint32_t context);
+
+/* This library function assist the user with sending a message without
+ * dealing directly with the CMSG header.
+ */
+int sctp_send(int s, const void *msg, size_t len,
+              const struct sctp_sndrcvinfo *sinfo, int flags);
+
+/* This library function assists the user with the advanced features
+ * of SCTP.  This is a new SCTP API described in the section 8.8 of the
+ * Sockets API Extensions for SCTP. This is implemented using the
+ * recvmsg() interface.
+ */
+int sctp_recvmsg(int s, void *msg, size_t len, struct sockaddr *from,
+		 socklen_t *fromlen, struct sctp_sndrcvinfo *sinfo,
+		 int *msg_flags);
+
+/* Return the address length for an address family. */
+int sctp_getaddrlen(sa_family_t family);
+
+__END_DECLS
+
+#endif /* __linux_sctp_h__ */
